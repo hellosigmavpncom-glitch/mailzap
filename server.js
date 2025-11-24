@@ -1,6 +1,5 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const Mailin = require("mailin");
 const path = require("path");
 
 const app = express();
@@ -10,42 +9,50 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "/")));
 
 let inbox = [];
+let currentEmail = "";
 
-// Start Mailin (local email receiver)
-Mailin.start({
-  smtpOptions: { host: "0.0.0.0", port: 2525 }, // 2525 for local testing
-  disableWebhookValidation: true
+// Helper: generate random disposable email
+function generateEmail() {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let local = "";
+  for (let i = 0; i < 8; i++) {
+    local += chars[Math.floor(Math.random() * chars.length)];
+  }
+  currentEmail = local + "@mailzap.test";
+  return currentEmail;
+}
+
+// Endpoint: get current disposable email
+app.get("/email", (req, res) => {
+  if (!currentEmail) generateEmail();
+  res.json({ email: currentEmail });
 });
 
-Mailin.on("message", (connection, data, content) => {
-  inbox.push({
-    from: data.from.text,
-    to: data.to.text,
-    subject: data.subject,
-    text: data.text
-  });
-  console.log("✅ Email received:", data.subject);
-});
-
-// Endpoint for inbox
+// Endpoint: get inbox messages
 app.get("/inbox", (req, res) => res.json(inbox));
 
-// Endpoint to refresh/clear inbox
+// Endpoint: refresh inbox
 app.post("/refresh", (req, res) => {
   inbox = [];
   res.send("Inbox refreshed!");
 });
 
-// Optional: test email route for local testing
+// Endpoint: send test email (for testing locally or frontend)
 app.post("/send-test-email", (req, res) => {
   const { from, subject, text } = req.body;
-  inbox.push({ from: from || "test@example.com", subject: subject || "Test email", text: text || "Hello!" });
+  inbox.push({
+    from: from || "test@example.com",
+    subject: subject || "Test email",
+    text: text || "Hello!"
+  });
   res.send("Test email added!");
 });
 
-// Serve index.html on /
+// Serve index.html for frontend
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-app.listen(3000, () => console.log("✅ MailZap running on http://localhost:3000"));
+// Use dynamic port for Render
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`✅ MailZap running on port ${PORT}`));
